@@ -44,35 +44,66 @@ const getDeviceInfo = require("../utils/deviceInfo");
 
 const signup = async (req, res) => {
   try {
-    console.log("STEP 1");
-
     const { name, email, password, phone } = req.body;
 
-    console.log("STEP 2");
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: "Name, email and password are required",
+      });
+    }
 
-    const existing = await User.findOne({ email: email.toLowerCase() });
+    const existing = await User.findOne({
+      email: email.toLowerCase(),
+    });
 
-    console.log("STEP 3");
+    if (existing) {
+      return res.status(400).json({
+        message: "Email already registered",
+      });
+    }
 
     const user = await User.create({
       name,
-      email,
+      email: email.toLowerCase(),
       password,
       phone,
     });
 
-    console.log("STEP 4", user);
-    console.log(req.body);
+    const info = getDeviceInfo(req);
 
-    return res.json({ success: true });
+    user.lastIp = info.ip;
+    user.lastDevice = info.device;
+    user.lastBrowser = info.browser;
+    user.lastOs = info.os;
+    user.lastCity = info.city;
+    user.lastState = info.state;
+    user.lastCountry = info.country;
+    user.lastActiveAt = new Date();
 
+    user.loginHistory.push({
+      ...info,
+      loginAt: new Date(),
+    });
+
+    await user.save();
+
+    const token = generateToken(user._id, user.role);
+
+    return res.status(201).json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+      },
+    });
   } catch (error) {
     console.error(error);
-    console.error(error.stack);
 
     return res.status(500).json({
       message: error.message,
-      stack: error.stack,
     });
   }
 };
